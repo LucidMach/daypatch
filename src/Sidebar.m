@@ -231,16 +231,16 @@ static void placeDownloads(NSView *footer) {
     }
 }
 
-// Dia shows the chat library as either an icon button or an icon + "Chats" cell. While
-// the footer is mid-transition (peek, resize) both can be on screen at once: the icon
-// and the label then appear twice. Keep the button and hide the cell if both show.
+// Dia shows the chat library as an icon button, plus an icon + "Chats" cell. The cell
+// can be left with a 0x0 frame whose subviews (laid out at negative offsets) still draw,
+// so the icon and label appear a second time, clipped at the sidebar's left edge. While
+// the button is on screen the cell is redundant: hide it.
 static void dedupeLibrary(NSView *footer) {
     NSView *cell = TweakChildOfClass(footer, @"TabSidebar.LibraryCellView");
     NSView *button = TweakChildOfClass(footer, @"DiaLibrary.LibraryButtonView");
     if (!cell || !button) return;
-    BOOL cellShown = !cell.hidden && NSWidth(cell.frame) > 0 && NSHeight(cell.frame) > 0;
     BOOL buttonShown = !button.hidden && button.alphaValue > 0 && NSWidth(button.frame) > 0;
-    if (cellShown && buttonShown) cell.hidden = YES;
+    if (buttonShown && !cell.hidden) cell.hidden = YES;
 }
 
 static void hookedFooterLayout(NSView *self, SEL _cmd) {
