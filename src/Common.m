@@ -11,6 +11,8 @@ NSString *const TweakKeySidebarFullURL = @"daypatch.sidebarShowsFullURL";
 NSString *const TweakKeySidebarNavButtons = @"daypatch.sidebarShowsNavButtons";
 NSString *const TweakKeyTopBarWhenSidebarHidden = @"daypatch.topBarWhenSidebarHidden";
 
+NSString *const TweakKeyFullScreenSidebarHover = @"daypatch.fullScreenSidebarHover";
+
 @implementation TweakSettings
 
 + (void)initialize {
@@ -40,6 +42,7 @@ NSString *const TweakKeyTopBarWhenSidebarHidden = @"daypatch.topBarWhenSidebarHi
         TweakKeyNoBackgroundNetworking: @NO,
         TweakKeyRendererLimit: @0,
         TweakKeyNewTabPalette: @YES,
+        TweakKeyFullScreenSidebarHover: @YES,
         TweakKeyCommandBarStyle: @(TweakCommandBarStyleNative),
     }];
 }
@@ -63,6 +66,8 @@ NSString *const TweakKeyTopBarWhenSidebarHidden = @"daypatch.topBarWhenSidebarHi
 + (BOOL)sidebarShowsFullURL { return [self.d boolForKey:TweakKeySidebarFullURL]; }
 + (BOOL)sidebarShowsNavButtons { return [self.d boolForKey:TweakKeySidebarNavButtons]; }
 + (BOOL)topBarWhenSidebarHidden { return [self.d boolForKey:TweakKeyTopBarWhenSidebarHidden]; }
+
++ (BOOL)fullScreenSidebarHover { return [self.d boolForKey:TweakKeyFullScreenSidebarHover]; }
 
 + (BOOL)boolForKey:(NSString *)key { return [self.d boolForKey:key]; }
 + (void)setBool:(BOOL)value forKey:(NSString *)key { [self.d setBool:value forKey:key]; [self changed]; }

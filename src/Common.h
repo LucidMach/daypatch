@@ -16,6 +16,7 @@ typedef NS_ENUM(NSInteger, TweakURLBarMode) {
 + (BOOL)sidebarShowsFullURL;
 + (BOOL)sidebarShowsNavButtons;
 + (BOOL)topBarWhenSidebarHidden;
++ (BOOL)fullScreenSidebarHover;
 + (BOOL)boolForKey:(NSString *)key;
 + (void)setBool:(BOOL)value forKey:(NSString *)key;
 + (void)setString:(NSString *)value forKey:(NSString *)key;
@@ -28,6 +29,7 @@ extern NSString *const TweakKeyCmdLFocusesSidebar;
 extern NSString *const TweakKeySidebarFullURL;
 extern NSString *const TweakKeySidebarNavButtons;
 extern NSString *const TweakKeyTopBarWhenSidebarHidden;
+extern NSString *const TweakKeyFullScreenSidebarHover;
 extern NSString *const TweakKeyHideAI;
 extern NSString *const TweakKeyBlockAI;
 extern NSString *const TweakKeyBlockTelemetry;

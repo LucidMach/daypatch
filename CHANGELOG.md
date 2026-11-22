@@ -2,6 +2,11 @@
 
 Each release's notes come from its section here (the release workflow requires one).
 
+## Unreleased
+
+**Dia ✦**
+- 🖥️ In full screen (e.g. a YouTube video), moving the pointer to the left screen edge slides the sidebar over the page, and it slides away when you move off it, as in Arc. Turn it off in Settings › DayPatch › **Reveal sidebar on hover in full screen**.
+
 ## 0.12.2
 
 Fixes and hardening from a code review by Filip Kotek ([ejthbit/daypatch](https://github.com/ejthbit/daypatch)) — thank you!

@@ -172,6 +172,7 @@ static NSColor *dyn(CGFloat darkWhite, CGFloat darkAlpha, CGFloat lightWhite, CG
         [self rowWithTitle:@"Show full URL" detail:@"Otherwise only the site's domain is shown." control:[self switchForKey:TweakKeySidebarFullURL] key:TweakKeySidebarFullURL],
         [self rowWithTitle:@"Back, forward and reload buttons" detail:@"Shown next to the window controls." control:[self switchForKey:TweakKeySidebarNavButtons] key:TweakKeySidebarNavButtons],
         [self rowWithTitle:@"Top bar while the sidebar is hidden" detail:@"Shows Dia's bar when the sidebar is collapsed, as in focus mode. Off, like Arc: no URL bar until the sidebar is back." control:[self switchForKey:TweakKeyTopBarWhenSidebarHidden] key:TweakKeyTopBarWhenSidebarHidden],
+        [self rowWithTitle:@"Reveal sidebar on hover in full screen" detail:@"Move the pointer to the left edge of the screen to slide the sidebar over the page, as in Arc." control:[self switchForKey:TweakKeyFullScreenSidebarHover] key:TweakKeyFullScreenSidebarHover],
     ]];
     _recorders = [NSMutableArray array];
     NSMutableArray *shortcutRows = [NSMutableArray arrayWithObject:

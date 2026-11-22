@@ -298,6 +298,85 @@ static void noteVisibility(NSView *c) {
 
 BOOL TweakSidebarFocusURLBar(NSWindow *window) { return [visibleBar(window) openEditor]; }
 
+#pragma mark - Full screen hover reveal
+
+// In full screen Dia parks the sidebar off-screen and hidden, with no way back short
+// of leaving full screen. Poll the pointer (cheap, and works over web content that
+// swallows mouse events): at the left screen edge slide the sidebar in over the page,
+// and slide it out again once the pointer leaves it.
+static const void *kRevealKey = &kRevealKey;   // @[hiddenBefore, originX, siblingAbove] while revealed
+static const CGFloat kEdgeZone = 3;
+static const CGFloat kRevealInset = 3;
+
+// Dia keeps the sidebar in a floating wrapper (parked off-screen in full screen); that
+// wrapper is what has to move. Falls back to the container itself.
+static NSView *revealTarget(NSView *c) {
+    for (NSView *v = c.superview; v; v = v.superview)
+        if ([NSStringFromClass(v.class) isEqualToString:@"Window.FloatingSidebarContainerView"]) return v;
+    return c;
+}
+
+static void endReveal(NSView *c, BOOL animated) {
+    NSArray *saved = objc_getAssociatedObject(c, kRevealKey);
+    if (!saved) return;
+    objc_setAssociatedObject(c, kRevealKey, nil, OBJC_ASSOCIATION_RETAIN);
+    BOOL wasHidden = [saved[0] boolValue];
+    NSRect f = c.frame;
+    f.origin.x = [saved[1] doubleValue];
+    NSView *above = saved[2] == NSNull.null ? nil : saved[2];
+    void (^done)(void) = ^{
+        c.hidden = wasHidden;
+        c.frame = f;
+        // Back to Dia's stacking order: just below the view that was above it.
+        NSView *parent = c.superview;
+        if (above && above.superview == parent) [parent addSubview:c positioned:NSWindowBelow relativeTo:above];
+    };
+    if (!animated) { done(); return; }
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
+        ctx.duration = 0.18;
+        c.animator.frame = f;
+    } completionHandler:^{ if (!objc_getAssociatedObject(c, kRevealKey)) done(); }];
+}
+
+static void beginReveal(NSView *c) {
+    NSRect f = c.frame;
+    // Dia stacks the page above the sidebar (the sidebar normally sits beside it, not
+    // over it), so lift the sidebar over the page for as long as it's revealed.
+    NSView *parent = c.superview, *above = nil, *page = nil;
+    NSArray *sibs = parent.subviews;
+    NSUInteger i = [sibs indexOfObject:c];
+    if (i != NSNotFound && i + 1 < sibs.count) above = sibs[i + 1];
+    for (NSView *v in sibs) if ([NSStringFromClass(v.class) isEqualToString:@"ContentPane.ContentPaneView"]) page = v;
+    objc_setAssociatedObject(c, kRevealKey, @[@(c.hidden), @(f.origin.x), above ?: NSNull.null], OBJC_ASSOCIATION_RETAIN);
+    [parent addSubview:c positioned:NSWindowAbove relativeTo:page];
+    c.hidden = NO;
+    f.origin.x = kRevealInset;
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
+        ctx.duration = 0.18;
+        c.animator.frame = f;
+    }];
+}
+
+static void pollFullScreenHover(void) {
+    BOOL enabled = TweakSettings.fullScreenSidebarHover;
+    NSPoint mouse = NSEvent.mouseLocation;
+    for (NSView *container in gContainers.allObjects) {
+        NSView *c = revealTarget(container);
+        NSWindow *w = c.window;
+        BOOL revealed = objc_getAssociatedObject(c, kRevealKey) != nil;
+        BOOL full = w && (w.styleMask & NSWindowStyleMaskFullScreen);
+        if (!enabled || !full) { if (revealed) endReveal(c, NO); continue; }
+        CGFloat x = mouse.x - NSMinX(w.frame), y = mouse.y - NSMinY(w.frame);
+        BOOL inWindow = y >= 0 && y <= NSHeight(w.frame);
+        if (!revealed) {
+            BOOL parked = c.hidden || NSMaxX(c.frame) <= 0;
+            if (parked && inWindow && x >= -1 && x <= kEdgeZone) beginReveal(c);
+        } else if (!inWindow || x > NSWidth(c.frame) + 16) {
+            endReveal(c, YES);
+        }
+    }
+}
+
 void TweakSidebarInstall(void) {
     Class cls = TweakFindClass(@"_TtC10TabSidebar", @"SidebarContainerRootView");
     if (!cls) { NSLog(@"[daypatch] SidebarContainerRootView not found; sidebar URL bar inactive"); return; }
@@ -325,6 +404,7 @@ void TweakSidebarInstall(void) {
         }];
     NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval:3 repeats:YES block:^(__unused NSTimer *t) { refreshAll(); }];
     timer.tolerance = 1;
+    [NSTimer scheduledTimerWithTimeInterval:0.06 repeats:YES block:^(__unused NSTimer *t) { pollFullScreenHover(); }];
     [NSNotificationCenter.defaultCenter addObserverForName:TweakSettingsDidChangeNotification object:nil queue:nil
                                                 usingBlock:^(__unused NSNotification *n) {
         for (NSView *c in gContainers.allObjects) {
