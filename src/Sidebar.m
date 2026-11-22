@@ -204,6 +204,48 @@ static NSView *findDescendant(NSView *root, NSString *cls) {
     return nil;
 }
 
+// Dia's downloads glyph is a heavy filled circle, unlike the thin line icons around it
+// (chat, overflow). We hide Dia's glyph (the buttons keep their hover state, click
+// handling and progress bar) and draw a line-style arrow over it instead.
+@interface TweakDownloadsGlyph : NSImageView
+@end
+@implementation TweakDownloadsGlyph
+- (NSView *)hitTest:(NSPoint)p { return nil; }  // clicks go to Dia's button underneath
+- (void)updateTrackingAreas {
+    [super updateTrackingAreas];
+    for (NSTrackingArea *a in self.trackingAreas) [self removeTrackingArea:a];
+    [self addTrackingArea:[[NSTrackingArea alloc] initWithRect:NSZeroRect
+        options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect owner:self userInfo:nil]];
+}
+// No hover background: the icon just brightens.
+- (void)mouseEntered:(NSEvent *)e { self.contentTintColor = NSColor.labelColor; }
+- (void)mouseExited:(NSEvent *)e { self.contentTintColor = NSColor.secondaryLabelColor; }
+@end
+
+static const void *kGlyphKey = &kGlyphKey;
+
+static void styleDownloads(NSView *footer, NSView *dl) {
+    TweakDownloadsGlyph *g = objc_getAssociatedObject(footer, kGlyphKey);
+    if (!g) {
+        g = [[TweakDownloadsGlyph alloc] initWithFrame:NSZeroRect];
+        NSImage *img = [NSImage imageWithSystemSymbolName:@"arrow.down.circle" accessibilityDescription:@"Downloads"];
+        g.image = [img imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithPointSize:13 weight:NSFontWeightRegular]];
+        g.contentTintColor = NSColor.secondaryLabelColor;
+        g.imageScaling = NSImageScaleNone;
+        objc_setAssociatedObject(footer, kGlyphKey, g, OBJC_ASSOCIATION_RETAIN);
+    }
+    if (g.superview != footer) [footer addSubview:g positioned:NSWindowAbove relativeTo:dl];
+    g.frame = dl.frame;
+    g.hidden = dl.hidden;
+    for (NSView *b in dl.subviews)
+        if ([NSStringFromClass(b.class) isEqualToString:@"TabSurface.TabSurfaceButton"])
+            for (NSView *i in b.subviews) {
+                NSString *ic = NSStringFromClass(i.class);
+                BOOL glyph = [i isKindOfClass:NSImageView.class], bg = [ic isEqualToString:@"TabUI.TabBackgroundView"];
+                if ((glyph || bg) && i.alphaValue != 0) i.alphaValue = 0;  // bg = hover highlight
+            }
+}
+
 static void placeDownloads(NSView *footer) {
     NSView *dl = findDescendant(footer, kDownloadsClass);
     if (!dl) {
@@ -222,6 +264,7 @@ static void placeDownloads(NSView *footer) {
     CGFloat s = 34;
     NSRect f = NSMakeRect(x, MAX(0, (NSHeight(footer.bounds) - s) / 2), s, s);
     if (!NSEqualRects(dl.frame, f)) dl.frame = f;
+    styleDownloads(footer, dl);
     if (spaces && NSMinX(spaces.frame) < NSMaxX(f)) {
         NSRect sf = spaces.frame;
         CGFloat right = NSMaxX(sf);
