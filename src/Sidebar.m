@@ -209,6 +209,9 @@ static NSView *findDescendant(NSView *root, NSString *cls) {
 // handling and progress bar) and draw a line-style arrow over it instead.
 @interface TweakDownloadsGlyph : NSImageView
 @end
+// Resting tint: dimmer than secondaryLabelColor so it sits at the chat icon's brightness.
+static NSColor *glyphRestColor(void) { return dyn(1, 0.3, 0, 0.32); }
+
 @implementation TweakDownloadsGlyph
 - (NSView *)hitTest:(NSPoint)p { return nil; }  // clicks go to Dia's button underneath
 - (void)updateTrackingAreas {
@@ -219,7 +222,7 @@ static NSView *findDescendant(NSView *root, NSString *cls) {
 }
 // No hover background: the icon just brightens.
 - (void)mouseEntered:(NSEvent *)e { self.contentTintColor = NSColor.labelColor; }
-- (void)mouseExited:(NSEvent *)e { self.contentTintColor = NSColor.secondaryLabelColor; }
+- (void)mouseExited:(NSEvent *)e { self.contentTintColor = glyphRestColor(); }
 @end
 
 static const void *kGlyphKey = &kGlyphKey;
@@ -229,8 +232,8 @@ static void styleDownloads(NSView *footer, NSView *dl) {
     if (!g) {
         g = [[TweakDownloadsGlyph alloc] initWithFrame:NSZeroRect];
         NSImage *img = [NSImage imageWithSystemSymbolName:@"arrow.down.circle" accessibilityDescription:@"Downloads"];
-        g.image = [img imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithPointSize:13 weight:NSFontWeightRegular]];
-        g.contentTintColor = NSColor.secondaryLabelColor;
+        g.image = [img imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithPointSize:13.65 weight:NSFontWeightRegular]];
+        g.contentTintColor = glyphRestColor();
         g.imageScaling = NSImageScaleNone;
         objc_setAssociatedObject(footer, kGlyphKey, g, OBJC_ASSOCIATION_RETAIN);
     }
@@ -242,7 +245,10 @@ static void styleDownloads(NSView *footer, NSView *dl) {
             for (NSView *i in b.subviews) {
                 NSString *ic = NSStringFromClass(i.class);
                 BOOL glyph = [i isKindOfClass:NSImageView.class], bg = [ic isEqualToString:@"TabUI.TabBackgroundView"];
-                if ((glyph || bg) && i.alphaValue != 0) i.alphaValue = 0;  // bg = hover highlight
+                if (glyph || bg) {  // bg = hover highlight; Dia redraws it through its layer, so hide outright
+                    if (i.alphaValue != 0) i.alphaValue = 0;
+                    if (!i.hidden) i.hidden = YES;
+                }
             }
 }
 
@@ -262,7 +268,9 @@ static void placeDownloads(NSView *footer) {
     NSView *spaces = TweakChildOfClass(footer, @"TabSidebar.SpaceSwitcherView");
     CGFloat x = (lib && !lib.hidden) ? NSMaxX(lib.frame) + 2 : 15;
     CGFloat s = 34;
-    NSRect f = NSMakeRect(x, MAX(0, (NSHeight(footer.bounds) - s) / 2), s, s);
+    // Centre on the chat button so the two icons share a horizontal axis.
+    CGFloat midY = (lib && !lib.hidden) ? NSMidY(lib.frame) : NSHeight(footer.bounds) / 2;
+    NSRect f = NSMakeRect(x, midY - s / 2, s, s);
     if (!NSEqualRects(dl.frame, f)) dl.frame = f;
     styleDownloads(footer, dl);
     if (spaces && NSMinX(spaces.frame) < NSMaxX(f)) {
