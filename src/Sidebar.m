@@ -188,6 +188,55 @@ static NSColor *dyn(CGFloat darkWhite, CGFloat darkAlpha, CGFloat lightWhite, CG
 
 static TweakTitleObserver *gTitleObserver;
 
+#pragma mark - Downloads button
+
+// Dia puts the downloads button at the right end of the header row, where our nav
+// buttons go. Move it to the footer, right after the library (chat) button.
+static NSString *const kFooterClass = @"TabSidebar.SidebarContainerFooterView";
+static NSString *const kDownloadsClass = @"TabSurface.DownloadsButtonView";
+static void (*origFooterLayout)(id, SEL);
+
+static NSView *findDescendant(NSView *root, NSString *cls) {
+    for (NSView *s in root.subviews) {
+        if ([NSStringFromClass(s.class) isEqualToString:cls]) return s;
+        NSView *d = findDescendant(s, cls);
+        if (d) return d;
+    }
+    return nil;
+}
+
+static void placeDownloads(NSView *footer) {
+    NSView *dl = findDescendant(footer, kDownloadsClass);
+    if (!dl) {
+        // Still in the header: take it from there.
+        NSView *c = footer.superview;
+        NSView *header = c ? TweakChildOfClass(c, kHeaderClass) : nil;
+        dl = header ? findDescendant(header, kDownloadsClass) : nil;
+        if (!dl) return;
+        [dl removeFromSuperview];
+        dl.translatesAutoresizingMaskIntoConstraints = YES;
+        [footer addSubview:dl];
+    }
+    NSView *lib = TweakChildOfClass(footer, @"DiaLibrary.LibraryButtonView");
+    NSView *spaces = TweakChildOfClass(footer, @"TabSidebar.SpaceSwitcherView");
+    CGFloat x = (lib && !lib.hidden) ? NSMaxX(lib.frame) + 2 : 15;
+    CGFloat s = 34;
+    NSRect f = NSMakeRect(x, MAX(0, (NSHeight(footer.bounds) - s) / 2), s, s);
+    if (!NSEqualRects(dl.frame, f)) dl.frame = f;
+    if (spaces && NSMinX(spaces.frame) < NSMaxX(f)) {
+        NSRect sf = spaces.frame;
+        CGFloat right = NSMaxX(sf);
+        sf.origin.x = NSMaxX(f);
+        sf.size.width = MAX(0, right - sf.origin.x);
+        spaces.frame = sf;
+    }
+}
+
+static void hookedFooterLayout(NSView *self, SEL _cmd) {
+    origFooterLayout(self, _cmd);
+    placeDownloads(self);
+}
+
 #pragma mark - Container layout
 
 static TweakSidebarURLBar *barFor(NSView *container) { return objc_getAssociatedObject(container, kBarKey); }
@@ -325,6 +374,14 @@ static BOOL isPeeking(NSView *c) {
     return NO;
 }
 
+// Whether Dia has the sidebar docked (the page is pushed aside to make room for it).
+// Then it owns the sidebar's state and a peek must neither start nor restore anything.
+static BOOL sidebarDocked(NSView *target) {
+    for (NSView *v in target.superview.subviews)
+        if ([NSStringFromClass(v.class) isEqualToString:@"Window.ContentContainerView"]) return NSMinX(v.frame) > 40;
+    return NO;
+}
+
 static void endReveal(NSView *c, BOOL animated) {
     NSArray *saved = objc_getAssociatedObject(c, kRevealKey);
     if (!saved) return;
@@ -334,6 +391,7 @@ static void endReveal(NSView *c, BOOL animated) {
     f.origin.x = [saved[1] doubleValue];
     NSView *above = saved[2] == NSNull.null ? nil : saved[2];
     void (^done)(void) = ^{
+        if (sidebarDocked(c)) return;   // Dia docked it meanwhile (e.g. leaving full screen)
         c.hidden = wasHidden;
         c.frame = f;
         // Back to Dia's stacking order: just below the view that was above it.
@@ -377,8 +435,13 @@ static void pollFullScreenHover(void) {
         if (!enabled || !full) { if (revealed) endReveal(c, NO); continue; }
         CGFloat x = mouse.x - NSMinX(w.frame), y = mouse.y - NSMinY(w.frame);
         BOOL inWindow = y >= 0 && y <= NSHeight(w.frame);
+        if (revealed && sidebarDocked(c)) {
+            // Dia docked the sidebar while it was peeked: leave its state alone.
+            objc_setAssociatedObject(c, kRevealKey, nil, OBJC_ASSOCIATION_RETAIN);
+            continue;
+        }
         if (!revealed) {
-            BOOL parked = c.hidden || NSMaxX(c.frame) <= 0;
+            BOOL parked = (c.hidden || NSMaxX(c.frame) <= 0) && !sidebarDocked(c);
             if (parked && inWindow && x >= -1 && x <= kEdgeZone) beginReveal(c);
         } else if (!inWindow || x > NSWidth(c.frame) + 16) {
             endReveal(c, YES);
@@ -391,6 +454,8 @@ void TweakSidebarInstall(void) {
     if (!cls) { NSLog(@"[daypatch] SidebarContainerRootView not found; sidebar URL bar inactive"); return; }
     gContainers = [NSHashTable weakObjectsHashTable];
     origLayout = (void *)TweakHook(cls, @selector(layout), (IMP)hookedLayout);
+    Class footer = NSClassFromString(kFooterClass);
+    if (footer) origFooterLayout = (void *)TweakHook(footer, @selector(layout), (IMP)hookedFooterLayout);
     // Refresh on navigation-ish events: Dia's window title follows the active tab's
     // page title, and switching windows/tabs changes it too. A slow timer covers
     // pages that change URL without changing title. Also attaches a bar the container's
