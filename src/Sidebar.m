@@ -13,6 +13,7 @@ static const void *kBarKey = &kBarKey;
 static const void *kNavKey = &kNavKey;
 static const void *kGapKey = &kGapKey;
 static void noteVisibility(NSView *c);
+static BOOL isPeeking(NSView *c);
 
 static void (*origLayout)(id, SEL);
 static NSHashTable<NSView *> *gContainers;
@@ -267,7 +268,7 @@ static void hookedLayout(NSView *self, SEL _cmd) {
 static TweakSidebarURLBar *visibleBar(NSWindow *window) {
     for (NSView *c in gContainers.allObjects) {
         TweakSidebarURLBar *bar = barFor(c);
-        if (c.window == window && bar.superview && !c.isHiddenOrHasHiddenAncestor && NSWidth(c.frame) > 40) return bar;
+        if (c.window == window && bar.superview && !c.isHiddenOrHasHiddenAncestor && NSWidth(c.frame) > 40 && !isPeeking(c)) return bar;
     }
     return nil;
 }
@@ -287,7 +288,7 @@ BOOL TweakSidebarHasURLBar(NSWindow *window) {
 static const void *kShownKey = &kShownKey;
 static void noteVisibility(NSView *c) {
     if (!TweakSettings.topBarWhenSidebarHidden) return;
-    BOOL shown = !c.isHiddenOrHasHiddenAncestor && NSWidth(c.frame) > 40;
+    BOOL shown = !c.isHiddenOrHasHiddenAncestor && NSWidth(c.frame) > 40 && !isPeeking(c);
     NSNumber *was = objc_getAssociatedObject(c, kShownKey);
     objc_setAssociatedObject(c, kShownKey, @(shown), OBJC_ASSOCIATION_RETAIN);
     if (was && was.boolValue != shown)
@@ -314,6 +315,14 @@ static NSView *revealTarget(NSView *c) {
     for (NSView *v = c.superview; v; v = v.superview)
         if ([NSStringFromClass(v.class) isEqualToString:@"Window.FloatingSidebarContainerView"]) return v;
     return c;
+}
+
+// A hover reveal is a peek, not the sidebar coming back: the top bar must not react to
+// it (it would hide and the page would jump under the pointer, then jump back).
+static BOOL isPeeking(NSView *c) {
+    for (NSView *v = c; v; v = v.superview)
+        if (objc_getAssociatedObject(v, kRevealKey)) return YES;
+    return NO;
 }
 
 static void endReveal(NSView *c, BOOL animated) {
